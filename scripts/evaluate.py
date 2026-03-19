@@ -10,13 +10,31 @@ import numpy as np
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from src.agents import MarkovQAgent
 from src.game import Game2048
 from src.ui import PygameUI
 
 
+def board_to_observation(board: np.ndarray) -> np.ndarray:
+    """Convert a raw board into the environment's log2 observation format."""
+    observation = np.zeros_like(board, dtype=np.int32)
+    mask = board > 0
+    observation[mask] = np.log2(board[mask]).astype(np.int32)
+    return observation
+
+
+def valid_actions_for_board(board: np.ndarray) -> list[int]:
+    """Compute valid actions directly from a board snapshot."""
+    game = Game2048(size=board.shape[0])
+    game.board = board.copy()
+    game.score = 0
+    game.max_tile = int(np.max(board)) if board.size else 0
+    return game.get_valid_actions()
+
+
 def random_agent(board: np.ndarray) -> int:
     """
-    Random agent for testing (placeholder).
+    Random valid-action agent for testing.
 
     Args:
         board: Current board state
@@ -24,8 +42,15 @@ def random_agent(board: np.ndarray) -> int:
     Returns:
         Random valid action
     """
-    # This is a placeholder - replace with actual model inference
-    return np.random.randint(0, 4)
+    valid_actions = valid_actions_for_board(board)
+    return int(np.random.choice(valid_actions))
+
+
+def load_markov_agent(model_path: str) -> MarkovQAgent:
+    """Load a trained Markov Q agent from disk."""
+    agent = MarkovQAgent()
+    agent.load(model_path)
+    return agent
 
 
 def main():
@@ -35,6 +60,13 @@ def main():
         "--model-path", type=str, default=None, help="Path to trained model checkpoint"
     )
     parser.add_argument("--n-episodes", type=int, default=1, help="Number of episodes to run")
+    parser.add_argument(
+        "--agent-type",
+        type=str,
+        default="markov",
+        choices=["markov", "random"],
+        help="Agent implementation to evaluate",
+    )
     parser.add_argument("--visualize", action="store_true", help="Show visual playback")
     parser.add_argument(
         "--delay", type=int, default=500, help="Delay between moves in ms (for visualization)"
@@ -44,12 +76,21 @@ def main():
     args = parser.parse_args()
 
     # Load model if provided
-    if args.model_path:
-        print(f"Loading model from: {args.model_path}")
-        # TODO: Implement model loading and inference
-        # For now, use random agent
-        print("WARNING: Model loading not yet implemented, using random agent")
-        get_action = random_agent
+    if args.model_path and args.agent_type == "markov":
+        print(f"Loading Markov Q agent from: {args.model_path}")
+        agent = load_markov_agent(args.model_path)
+
+        def get_action(board: np.ndarray) -> int:
+            observation = board_to_observation(board)
+            valid_actions = valid_actions_for_board(board)
+            return agent.select_action(
+                observation,
+                valid_actions=valid_actions,
+                use_epsilon=False,
+            )
+
+    elif args.model_path and args.agent_type != "random":
+        raise ValueError(f"Unsupported agent type: {args.agent_type}")
     else:
         print("No model provided, using random agent")
         get_action = random_agent

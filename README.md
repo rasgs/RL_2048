@@ -49,7 +49,7 @@ uv run python scripts/train.py
 
 ### Watch a trained agent play
 ```bash
-uv run python scripts/evaluate.py --model-path models/best_model.pt --visualize
+uv run python scripts/evaluate.py --model-path models/markov_q_best.pt --visualize
 ```
 
 ## Development

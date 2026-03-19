@@ -1,3 +1,7 @@
 """RL agents for 2048."""
 
-# Agent implementations will be added here
+from .feature_q import FeatureQAgent
+from .markov_q import MarkovQAgent
+from .replay_buffer import ReplayBuffer
+
+__all__ = ["FeatureQAgent", "MarkovQAgent", "ReplayBuffer"]
