@@ -43,7 +43,8 @@ class FeatureQAgent:
             gamma: Discount factor.
             epsilon_start: Initial exploration rate.
             epsilon_end: Minimum exploration rate.
-            epsilon_decay: Decay rate (exponential: multiply per step, linear: episodes to reach end).
+            epsilon_decay: Decay rate (exponential: multiply per step,
+                linear: episodes to reach end).
             decay_type: "exponential" or "linear" epsilon decay.
             seed: Optional RNG seed.
         """
