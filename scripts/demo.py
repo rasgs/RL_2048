@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Quick demo of the 2048 implementation."""
 
-
 import numpy as np
 
 from src.game import Action, Game2048

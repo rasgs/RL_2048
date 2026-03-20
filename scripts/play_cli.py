@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """CLI interface for playing 2048."""
 
-
 from src.game import Action, Game2048
 
 
