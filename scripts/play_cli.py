@@ -1,11 +1,6 @@
 #!/usr/bin/env python
 """CLI interface for playing 2048."""
 
-import os
-import sys
-
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.game import Action, Game2048
 

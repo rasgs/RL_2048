@@ -2,11 +2,6 @@
 """Visual interface for playing 2048 with pygame."""
 
 import argparse
-import os
-import sys
-
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.game import Game2048
 from src.ui import PygameUI

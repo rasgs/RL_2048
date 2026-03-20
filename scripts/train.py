@@ -4,14 +4,9 @@
 from __future__ import annotations
 
 import argparse
-import os
-import sys
 
 import numpy as np
 from tqdm import tqdm
-
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.agents import FeatureQAgent, MarkovQAgent
 from src.env import Gym2048Env

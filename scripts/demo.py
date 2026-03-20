@@ -1,11 +1,6 @@
 #!/usr/bin/env python
 """Quick demo of the 2048 implementation."""
 
-import os
-import sys
-
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import numpy as np
 

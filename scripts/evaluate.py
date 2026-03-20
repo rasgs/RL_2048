@@ -2,13 +2,8 @@
 """Evaluate a trained RL agent on 2048."""
 
 import argparse
-import os
-import sys
 
 import numpy as np
-
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.agents import MarkovQAgent
 from src.game import Game2048
