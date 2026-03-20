@@ -11,12 +11,7 @@ def test_feature_extraction_simple():
 
     # Simple board: one 2 tile, one 4 tile, rest empty
     # Board in log2 representation: 0=empty, 1=2, 2=4
-    board = np.array([
-        [1, 2, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0]
-    ], dtype=np.int32)
+    board = np.array([[1, 2, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], dtype=np.int32)
 
     features = agent._extract_features(board)
 
@@ -34,12 +29,7 @@ def test_feature_extraction_full_board():
 
     # Board with various tiles
     # 8=128 (log2=7), 64=6, 32=5, 16=4, 8=3, 4=2, 2=1
-    board = np.array([
-        [7, 6, 5, 4],
-        [3, 2, 1, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0]
-    ], dtype=np.int32)
+    board = np.array([[7, 6, 5, 4], [3, 2, 1, 0], [0, 0, 0, 0], [0, 0, 0, 0]], dtype=np.int32)
 
     features = agent._extract_features(board)
 
@@ -130,19 +120,25 @@ def test_feature_state_space_reduction():
     agent = FeatureQAgent(seed=42)
 
     # Two different boards with same tile distribution and max in same quadrant
-    board1 = np.array([
-        [3, 2, 0, 0],  # 8, 4, empty, empty
-        [1, 0, 0, 0],  # 2, empty, empty, empty
-        [0, 0, 0, 0],
-        [0, 0, 0, 0]
-    ], dtype=np.int32)
+    board1 = np.array(
+        [
+            [3, 2, 0, 0],  # 8, 4, empty, empty
+            [1, 0, 0, 0],  # 2, empty, empty, empty
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+        ],
+        dtype=np.int32,
+    )
 
-    board2 = np.array([
-        [3, 1, 0, 0],  # 8, 2, empty, empty (different positions)
-        [2, 0, 0, 0],  # 4, empty, empty, empty
-        [0, 0, 0, 0],
-        [0, 0, 0, 0]
-    ], dtype=np.int32)
+    board2 = np.array(
+        [
+            [3, 1, 0, 0],  # 8, 2, empty, empty (different positions)
+            [2, 0, 0, 0],  # 4, empty, empty, empty
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+        ],
+        dtype=np.int32,
+    )
 
     features1 = agent._extract_features(board1)
     features2 = agent._extract_features(board2)

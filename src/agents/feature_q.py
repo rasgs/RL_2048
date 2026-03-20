@@ -202,7 +202,9 @@ class FeatureQAgent:
             # Linear decay: interpolate from start to end over decay episodes
             if self.episodes < self.epsilon_decay:
                 progress = self.episodes / self.epsilon_decay
-                self.epsilon = self.epsilon_start - (self.epsilon_start - self.epsilon_end) * progress
+                self.epsilon = (
+                    self.epsilon_start - (self.epsilon_start - self.epsilon_end) * progress
+                )
             else:
                 self.epsilon = self.epsilon_end
 
@@ -231,7 +233,9 @@ class FeatureQAgent:
         self.epsilon_start = state_dict["epsilon_start"]
         self.epsilon_end = state_dict["epsilon_end"]
         self.epsilon_decay = state_dict["epsilon_decay"]
-        self.decay_type = state_dict.get("decay_type", "exponential")  # Default for backward compatibility
+        self.decay_type = state_dict.get(
+            "decay_type", "exponential"
+        )  # Default for backward compatibility
         self.steps = state_dict["steps"]
         self.episodes = state_dict["episodes"]
         self.q_table = {

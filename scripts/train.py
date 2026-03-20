@@ -297,7 +297,12 @@ def main():
     parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
     parser.add_argument("--epsilon-start", type=float, default=1.0, help="Initial epsilon")
     parser.add_argument("--epsilon-end", type=float, default=0.05, help="Final epsilon")
-    parser.add_argument("--epsilon-decay", type=float, default=4000, help="Epsilon decay (episodes for linear, rate for exponential)")
+    parser.add_argument(
+        "--epsilon-decay",
+        type=float,
+        default=4000,
+        help="Epsilon decay (episodes for linear, rate for exponential)",
+    )
     parser.add_argument("--eval-freq", type=int, default=250, help="Episodes between evaluations")
     parser.add_argument(
         "--checkpoint-freq", type=int, default=1000, help="Episodes between checkpoints"
