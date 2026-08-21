@@ -20,7 +20,8 @@ class MarkovQAgent:
         gamma: float = 0.99,
         epsilon_start: float = 1.0,
         epsilon_end: float = 0.05,
-        epsilon_decay: int = 5000,
+        epsilon_decay: float = 5000,
+        decay_type: str = "exponential",
         seed: Optional[int] = None,
     ):
         """
@@ -32,7 +33,9 @@ class MarkovQAgent:
             gamma: Discount factor.
             epsilon_start: Initial exploration rate.
             epsilon_end: Minimum exploration rate.
-            epsilon_decay: Episodes used for linear epsilon decay.
+            epsilon_decay: Decay rate (exponential: multiply per step,
+                linear: episodes to reach end).
+            decay_type: "exponential" or "linear" epsilon decay.
             seed: Optional RNG seed.
         """
         self.action_size = action_size
@@ -42,6 +45,7 @@ class MarkovQAgent:
         self.epsilon_start = epsilon_start
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
+        self.decay_type = decay_type
         self.rng = np.random.RandomState(seed)
 
         self.q_table: Dict[StateKey, np.ndarray] = {}
@@ -138,14 +142,21 @@ class MarkovQAgent:
         return abs(float(td_error)), float(q_values[action])
 
     def update_epsilon(self):
-        """Linearly decay epsilon across episodes."""
+        """Decay epsilon (exponential or linear)."""
         self.episodes += 1
 
-        if self.episodes < self.epsilon_decay:
-            progress = self.episodes / self.epsilon_decay
-            self.epsilon = self.epsilon_start - (self.epsilon_start - self.epsilon_end) * progress
+        if self.decay_type == "exponential":
+            # Exponential decay: epsilon *= decay_rate each episode
+            self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
         else:
-            self.epsilon = self.epsilon_end
+            # Linear decay: interpolate from start to end over decay episodes
+            if self.episodes < self.epsilon_decay:
+                progress = self.episodes / self.epsilon_decay
+                self.epsilon = (
+                    self.epsilon_start - (self.epsilon_start - self.epsilon_end) * progress
+                )
+            else:
+                self.epsilon = self.epsilon_end
 
     def state_dict(self) -> dict:
         """Return a serializable agent state."""
@@ -157,6 +168,7 @@ class MarkovQAgent:
             "epsilon_start": self.epsilon_start,
             "epsilon_end": self.epsilon_end,
             "epsilon_decay": self.epsilon_decay,
+            "decay_type": self.decay_type,
             "steps": self.steps,
             "episodes": self.episodes,
             "q_table": {key: values.tolist() for key, values in self.q_table.items()},
@@ -171,6 +183,9 @@ class MarkovQAgent:
         self.epsilon_start = state_dict["epsilon_start"]
         self.epsilon_end = state_dict["epsilon_end"]
         self.epsilon_decay = state_dict["epsilon_decay"]
+        self.decay_type = state_dict.get(
+            "decay_type", "exponential"
+        )  # Default for backward compatibility
         self.steps = state_dict["steps"]
         self.episodes = state_dict["episodes"]
         self.q_table = {

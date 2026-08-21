@@ -4,17 +4,20 @@
 from __future__ import annotations
 
 import argparse
+from typing import Union
 
 import numpy as np
 from tqdm import tqdm
 
-from src.agents import FeatureQAgent, MarkovQAgent
+from src.agents import FeatureQAgent, LinearQAgent, MarkovQAgent
 from src.env import Gym2048Env
 from src.utils import MLFlowLogger, ModelCheckpoint
 
+Agent = Union[FeatureQAgent, LinearQAgent, MarkovQAgent]
+
 
 def evaluate_agent(
-    agent: MarkovQAgent,
+    agent: Agent,
     env: Gym2048Env,
     n_episodes: int = 10,
     max_steps: int = 10000,
@@ -68,6 +71,7 @@ def train(
     save_dir: str = "./models",
     experiment_name: str = "2048-markov-q",
     agent_type: str = "markov",
+    n_step: int | None = None,
     seed: int | None = None,
 ):
     """Main training loop."""
@@ -86,6 +90,11 @@ def train(
     )
 
     # Create agent based on type
+    # Determine decay type based on epsilon_decay value
+    # Large values (>1) indicate linear decay over N episodes
+    # Small values (<1) indicate exponential decay rate
+    decay_type = "linear" if epsilon_decay > 1 else "exponential"
+
     if agent_type == "feature":
         agent = FeatureQAgent(
             learning_rate=learning_rate,
@@ -93,6 +102,18 @@ def train(
             epsilon_start=epsilon_start,
             epsilon_end=epsilon_end,
             epsilon_decay=epsilon_decay,
+            decay_type=decay_type,
+            seed=seed,
+        )
+    elif agent_type == "linear":
+        agent = LinearQAgent(
+            learning_rate=learning_rate,
+            gamma=gamma,
+            epsilon_start=epsilon_start,
+            epsilon_end=epsilon_end,
+            epsilon_decay=epsilon_decay,
+            decay_type=decay_type,
+            n_step=n_step,
             seed=seed,
         )
     else:  # markov (full state)
@@ -102,6 +123,7 @@ def train(
             epsilon_start=epsilon_start,
             epsilon_end=epsilon_end,
             epsilon_decay=epsilon_decay,
+            decay_type=decay_type,
             seed=seed,
         )
 
@@ -112,7 +134,7 @@ def train(
     print(f"Agent: {agent.__class__.__name__}")
 
     # Set checkpoint prefix based on agent type
-    prefix = "feature_q" if agent_type == "feature" else "markov_q"
+    prefix = {"feature": "feature_q", "linear": "linear_q"}.get(agent_type, "markov_q")
 
     checkpoint_manager = ModelCheckpoint(
         save_dir=save_dir,
@@ -133,6 +155,7 @@ def train(
         "reward_mode": reward_mode,
         "invalid_move_penalty": invalid_move_penalty,
         "max_steps": max_steps,
+        "n_step": n_step,
         "seed": seed,
     }
     checkpoint_manager.save_config(config)
@@ -284,8 +307,12 @@ def main():
         "--agent-type",
         type=str,
         default="markov",
-        choices=["markov", "feature"],
-        help="Agent type: 'markov' (full state) or 'feature' (minimal features)",
+        choices=["markov", "feature", "linear"],
+        help=(
+            "Agent type: 'markov' (full state), 'feature' (discretized "
+            "heuristic features, tabular), or 'linear' (linear function "
+            "approximation over direction-aware heuristic features)"
+        ),
     )
     parser.add_argument("--episodes", type=int, default=5000, help="Number of episodes to train")
     parser.add_argument("--lr", type=float, default=0.1, help="Learning rate")
@@ -306,7 +333,7 @@ def main():
         "--reward-mode",
         type=str,
         default="score",
-        choices=["score", "log_score", "max_tile"],
+        choices=["score", "log_score", "max_tile", "shaped", "shaped_open_reward"],
         help="Reward shaping mode",
     )
     parser.add_argument(
@@ -322,6 +349,17 @@ def main():
         type=str,
         default="2048-markov-q",
         help="MLflow experiment name",
+    )
+    parser.add_argument(
+        "--n-step",
+        type=int,
+        default=None,
+        help=(
+            "Linear agent only: real rewards to accumulate before "
+            "bootstrapping off Q(s') to form the TD target. Omit for full "
+            "Monte Carlo (no bootstrapping, target is the true discounted "
+            "return for the rest of the episode)."
+        ),
     )
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
 
@@ -341,6 +379,7 @@ def main():
         save_dir=args.save_dir,
         experiment_name=args.experiment,
         agent_type=args.agent_type,
+        n_step=args.n_step,
         seed=args.seed,
     )
 

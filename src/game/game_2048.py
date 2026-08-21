@@ -97,10 +97,12 @@ class Game2048:
         """
         temp_board = self.board.copy()
         temp_score = self.score
+        temp_max_tile = self.max_tile
         self._move(action)
         is_valid = not np.array_equal(temp_board, self.board)
         self.board = temp_board
         self.score = temp_score
+        self.max_tile = temp_max_tile
         return is_valid
 
     def get_valid_actions(self) -> list[int]:

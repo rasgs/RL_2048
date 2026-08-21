@@ -13,57 +13,68 @@ def test_feature_extraction_simple():
     # Board in log2 representation: 0=empty, 1=2, 2=4
     board = np.array([[1, 2, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], dtype=np.int32)
 
-    features = agent._extract_features(board)
+    empty_bucket, max_tile_log2, mono_bucket, smoothness_bucket, merge_bucket = (
+        agent._extract_features(board)
+    )
 
-    # Expected: 1 tile of value 2, 1 tile of value 4, 14 empty, max in quadrant 0
-    assert features[0] == 1  # count of 2^1 (tile 2)
-    assert features[1] == 1  # count of 2^2 (tile 4)
-    assert features[2:12] == (0, 0, 0, 0, 0, 0, 0, 0, 0, 0)  # no higher tiles
-    assert features[12] == 14  # empty cells
-    assert features[13] == 0  # max tile (4) in top-left quadrant
+    # 14 empty cells -> bucket 4 (7+)
+    assert empty_bucket == 4
+    # Max tile is the 4 (log2 = 2)
+    assert max_tile_log2 == 2
+    # Only one non-empty adjacent pair, (1,2): line score 1; no other row/column
+    # has 2+ non-empty tiles -> total monotonicity score = 1 -> bucket 0
+    assert mono_bucket == 0
+    # Same single pair contributes |1-2| = 1 to smoothness -> bucket 0
+    assert smoothness_bucket == 0
+    # No adjacent equal non-zero pairs
+    assert merge_bucket == 0
 
 
 def test_feature_extraction_full_board():
-    """Test feature extraction on a more complex board."""
+    """Test feature extraction on a board with merge and ordering structure."""
     agent = FeatureQAgent(seed=456)
 
-    # Board with various tiles
-    # 8=128 (log2=7), 64=6, 32=5, 16=4, 8=3, 4=2, 2=1
-    board = np.array([[7, 6, 5, 4], [3, 2, 1, 0], [0, 0, 0, 0], [0, 0, 0, 0]], dtype=np.int32)
+    # Row 0: [2,2,4,4] -> log2: [1,1,2,2]
+    # Row 1: [8,4,4,0] -> log2: [3,2,2,0]
+    # Row 2: [8,0,0,0] -> log2: [3,0,0,0]
+    # Row 3: [0,0,0,0] -> log2: [0,0,0,0]
+    board = np.array([[1, 1, 2, 2], [3, 2, 2, 0], [3, 0, 0, 0], [0, 0, 0, 0]], dtype=np.int32)
 
-    features = agent._extract_features(board)
+    empty_bucket, max_tile_log2, mono_bucket, smoothness_bucket, merge_bucket = (
+        agent._extract_features(board)
+    )
 
-    # Check tile counts
-    assert features[0] == 1  # one 2
-    assert features[1] == 1  # one 4
-    assert features[2] == 1  # one 8
-    assert features[3] == 1  # one 16
-    assert features[4] == 1  # one 32
-    assert features[5] == 1  # one 64
-    assert features[6] == 1  # one 128
-    assert features[12] == 9  # 9 empty cells
-    assert features[13] == 0  # max tile (128) in top-left quadrant
+    # 8 empty cells -> bucket 4 (7+)
+    assert empty_bucket == 4
+    # Max tile is the 8 (log2 = 3)
+    assert max_tile_log2 == 3
+    # Row line-scores [3,2,0,0] + column line-scores [2,1,1,0] = 9 -> bucket 1 (>=5, <10)
+    assert mono_bucket == 1
+    # Smoothness sum over non-empty adjacent pairs = 5 -> bucket 1 (>=4, <8)
+    assert smoothness_bucket == 1
+    # 5 adjacent equal non-zero pairs, capped at 3+
+    assert merge_bucket == 3
 
 
-def test_feature_extraction_max_quadrant():
-    """Test that max tile quadrant is correctly identified."""
-    agent = FeatureQAgent(seed=789)
+def test_feature_tuple_length_and_ranges():
+    """Feature tuples should always have 5 entries within their documented ranges."""
+    agent = FeatureQAgent(seed=321)
 
-    # Test each quadrant
     boards = [
-        # Max in top-left (quadrant 0)
-        np.array([[5, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], dtype=np.int32),
-        # Max in top-right (quadrant 1)
-        np.array([[0, 0, 0, 5], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], dtype=np.int32),
-        # Max in bottom-left (quadrant 2)
-        np.array([[0, 0, 0, 0], [0, 0, 0, 0], [5, 0, 0, 0], [0, 0, 0, 0]], dtype=np.int32),
-        # Max in bottom-right (quadrant 3)
-        np.array([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 5]], dtype=np.int32),
+        np.zeros((4, 4), dtype=np.int32),
+        np.array([[1, 1, 2, 2], [3, 2, 2, 0], [3, 0, 0, 0], [0, 0, 0, 0]], dtype=np.int32),
+        np.array([[11, 10, 9, 8], [7, 6, 5, 4], [3, 2, 1, 12], [1, 2, 3, 4]], dtype=np.int32),
     ]
 
-    for quadrant, board in enumerate(boards):
-        features = agent._extract_features(board)
-        assert features[13] == quadrant, f"Expected quadrant {quadrant}, got {features[13]}"
+    for board in boards:
+        empty_bucket, max_tile_log2, mono_bucket, smoothness_bucket, merge_bucket = (
+            agent._extract_features(board)
+        )
+        assert 0 <= empty_bucket <= 4
+        assert 0 <= max_tile_log2 <= 12
+        assert 0 <= mono_bucket <= 4
+        assert 0 <= smoothness_bucket <= 4
+        assert 0 <= merge_bucket <= 3
 
 
 def test_agent_initialization():
@@ -91,8 +102,8 @@ def test_select_action_respects_valid_actions():
 
 
 def test_learn_updates_q_values():
-    """A single Q-learning step should move the chosen action value toward the target."""
-    agent = FeatureQAgent(learning_rate=0.5, gamma=0.9, epsilon_start=0.0, seed=1)
+    """With n_step=1, a single transition should immediately update the Q-table."""
+    agent = FeatureQAgent(learning_rate=0.5, gamma=0.9, epsilon_start=0.0, n_step=1, seed=1)
 
     state = np.zeros((4, 4), dtype=np.int32)
     next_state = np.ones((4, 4), dtype=np.int32)
@@ -115,11 +126,78 @@ def test_learn_updates_q_values():
     assert agent.steps == 1
 
 
+def test_learn_buffers_until_n_step_reached():
+    """With n_step=3, no update should fire until 3 real rewards have accumulated."""
+    agent = FeatureQAgent(learning_rate=0.1, gamma=0.9, epsilon_start=0.0, n_step=3, seed=1)
+
+    states = [np.zeros((4, 4), dtype=np.int32) for _ in range(4)]
+    rewards = [1.0, 2.0, 3.0]
+
+    for i in range(2):
+        td_error, updated_q = agent.learn(
+            states[i],
+            action=0,
+            reward=rewards[i],
+            next_state=states[i + 1],
+            done=False,
+            next_valid_actions=[0, 1, 2, 3],
+        )
+        assert td_error == 0.0
+        assert updated_q == 0.0
+        assert agent.steps == 0
+
+    td_error, updated_q = agent.learn(
+        states[2],
+        action=0,
+        reward=rewards[2],
+        next_state=states[3],
+        done=False,
+        next_valid_actions=[0, 1, 2, 3],
+    )
+
+    # 3-step return: r0 + gamma*r1 + gamma^2*r2 (Q-table starts empty, so the
+    # bootstrap term Q(states[3]) is also 0).
+    expected_target = 1.0 + 0.9 * 2.0 + 0.9**2 * 3.0
+    assert np.isclose(td_error, expected_target)
+    assert agent.steps == 1
+    assert len(agent._trajectory) == 2
+
+
+def test_learn_monte_carlo_flushes_full_episode_on_done():
+    """With n_step=None (the default), updates only fire once the episode ends."""
+    agent = FeatureQAgent(learning_rate=0.1, gamma=0.9, epsilon_start=0.0, seed=1)
+
+    states = [
+        np.zeros((4, 4), dtype=np.int32),
+        np.full((4, 4), 2, dtype=np.int32),
+        np.full((4, 4), 5, dtype=np.int32),
+        np.full((4, 4), 8, dtype=np.int32),
+    ]
+    rewards = [1.0, 2.0, 3.0]
+
+    for i in range(2):
+        td_error, _ = agent.learn(
+            states[i], action=0, reward=rewards[i], next_state=states[i + 1], done=False
+        )
+        assert td_error == 0.0
+        assert agent.steps == 0
+
+    agent.learn(states[2], action=0, reward=rewards[2], next_state=states[3], done=True)
+
+    assert agent.steps == 3
+    assert len(agent._trajectory) == 0
+
+    key0 = agent._extract_features(states[0])
+    expected_q0 = 0.1 * (1.0 + 0.9 * 2.0 + 0.9**2 * 3.0)
+    assert np.isclose(float(agent.q_table[key0][0]), expected_q0)
+
+
 def test_feature_state_space_reduction():
-    """Verify that different boards with same features map to same state."""
+    """Boards with the same bucketed heuristics alias; boards that differ don't."""
     agent = FeatureQAgent(seed=42)
 
-    # Two different boards with same tile distribution and max in same quadrant
+    # Two boards with the same tiles in different positions: same empty count,
+    # max tile, monotonicity, smoothness, and merge count -> intended aliasing.
     board1 = np.array(
         [
             [3, 2, 0, 0],  # 8, 4, empty, empty
@@ -143,8 +221,22 @@ def test_feature_state_space_reduction():
     features1 = agent._extract_features(board1)
     features2 = agent._extract_features(board2)
 
-    # Same tile counts, empty cells, and max quadrant
-    assert features1 == features2, "Different boards with same features should map to same state"
+    assert features1 == features2, "Boards sharing all bucketed heuristics should alias"
+
+    # A board with a higher max tile is a strategically different state and
+    # must map to a different key (differs in max_tile_log2: 4 vs 3).
+    board3 = np.array(
+        [
+            [3, 2, 0, 0],
+            [1, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 4],
+        ],
+        dtype=np.int32,
+    )
+
+    features3 = agent._extract_features(board3)
+    assert features1 != features3, "A higher max tile should produce a different feature key"
 
 
 def test_save_and_load_round_trip(tmp_path):

@@ -68,7 +68,9 @@ def test_learn_updates_q_values():
 
 def test_update_epsilon_reaches_floor():
     """Epsilon should decay linearly to the configured floor."""
-    agent = MarkovQAgent(epsilon_start=1.0, epsilon_end=0.2, epsilon_decay=4, seed=2)
+    agent = MarkovQAgent(
+        epsilon_start=1.0, epsilon_end=0.2, epsilon_decay=4, decay_type="linear", seed=2
+    )
 
     values = []
     for _ in range(5):
