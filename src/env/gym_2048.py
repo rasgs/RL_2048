@@ -38,13 +38,12 @@ class Gym2048Env(gym.Env):
                 - "score": Reward is score gained from merges
                 - "log_score": Reward is log2 of score gained
                 - "max_tile": Reward based on max tile reached
-                - "shaped": Dense composite reward (new max tile, open-cell
-                    count shrinking, score improving, game-over), modeled on
-                    a reference agent's hand-tuned reward_calc
-                - "shaped_open_reward": Same as "shaped" but the open-cell
-                    term is flipped to reward more open cells instead of
-                    fewer, matching the "more empty cells is safer" intuition
-                    used elsewhere in this project
+                - "shaped": Dense composite reward, all terms on a comparable
+                    small scale: a bonus for reaching a new max tile, a
+                    bonus/penalty for open-cell count improving/worsening
+                    (more empty cells is safer, matching the mobility
+                    heuristic used elsewhere in this project), and a
+                    game-over penalty
             max_steps: Maximum steps per episode (None for no limit)
         """
         super().__init__()
@@ -118,7 +117,6 @@ class Gym2048Env(gym.Env):
         # comparison (e.g. "shaped")
         old_max = self.game.max_tile
         old_open = int(np.sum(self.game.board == 0))
-        old_score = self.game.score
 
         # Execute action
         board, score_gained, done = self.game.step(action)
@@ -131,7 +129,6 @@ class Gym2048Env(gym.Env):
                 score_gained,
                 old_max=old_max,
                 old_open=old_open,
-                old_score=old_score,
                 done=done,
             )
 
@@ -180,7 +177,6 @@ class Gym2048Env(gym.Env):
         score_gained: float,
         old_max: int = 0,
         old_open: int = 0,
-        old_score: int = 0,
         done: bool = False,
     ) -> float:
         """
@@ -188,61 +184,47 @@ class Gym2048Env(gym.Env):
 
         Args:
             score_gained: Score gained from last move
-            old_max: Max tile before the move (only used by "shaped" modes)
+            old_max: Max tile before the move (only used by "shaped" mode)
             old_open: Empty cell count before the move (only used by
-                "shaped" modes)
-            old_score: Score before the move (only used by "shaped" modes)
-            done: Whether the move ended the game (only used by "shaped" modes)
+                "shaped" mode)
+            done: Whether the move ended the game (only used by "shaped" mode)
 
         Returns:
             Computed reward
         """
         if self.reward_mode == "score":
-            return score_gained
+            return float(score_gained)
         elif self.reward_mode == "log_score":
             if score_gained > 0:
-                return np.log2(score_gained)
+                return float(np.log2(score_gained))
             return 0.0
         elif self.reward_mode == "max_tile":
             # Reward when reaching new max tile
             return float(self.game.max_tile)
-        elif self.reward_mode in ("shaped", "shaped_open_reward"):
-            return self._compute_shaped_reward(old_max, old_open, old_score, done)
+        elif self.reward_mode == "shaped":
+            return self._compute_shaped_reward(old_max, old_open, done)
         else:
             raise ValueError(f"Unknown reward mode: {self.reward_mode}")
 
-    def _compute_shaped_reward(
-        self, old_max: int, old_open: int, old_score: int, done: bool
-    ) -> float:
+    def _compute_shaped_reward(self, old_max: int, old_open: int, done: bool) -> float:
         """
-        Dense composite reward modeled on a reference agent's reward_calc:
-        a large bonus for reaching a new max tile, a bonus/penalty for the
-        open-cell count improving/worsening, a smaller bonus/penalty for
-        score improving/not, and a large penalty for ending the game. Every
-        term is evaluated independently and summed (not an if/elif chain),
-        so a single move can accumulate multiple bonuses/penalties at once.
-
-        "shaped_open_reward" flips the open-cell term's sign relative to
-        "shaped" to reward more empty cells (mobility) instead of fewer,
-        for direct comparison against the faithful port of the reference.
+        Dense composite reward with every term on a comparable small scale,
+        so no single term dominates the TD target/gradient for a linear
+        value function. Terms are evaluated independently and summed (not
+        an if/elif chain), so a single move can accumulate multiple
+        bonuses/penalties at once.
         """
         new_max = self.game.max_tile
         new_open = int(np.sum(self.game.board == 0))
-        new_score = self.game.score
 
         reward = 0.0
         if new_max > old_max:
-            reward += 100.0
+            reward += 1.0
 
-        if self.reward_mode == "shaped_open_reward":
-            reward += 25.0 if new_open > old_open else -50.0
-        else:
-            reward += 25.0 if new_open < old_open else -50.0
-
-        reward += 2.0 if new_score > old_score else -15.0
+        reward += 0.5 if new_open > old_open else -0.5
 
         if done:
-            reward -= 1000.0
+            reward -= 5.0
 
         return reward
 

@@ -5,7 +5,8 @@ import argparse
 
 import numpy as np
 
-from src.agents import MarkovQAgent
+from src.agents import LinearQAgent, MarkovQAgent, NTupleQAgent
+from src.agents.search import select_action as expectimax_select_action
 from src.game import Game2048
 from src.ui import PygameUI
 
@@ -48,6 +49,50 @@ def load_markov_agent(model_path: str) -> MarkovQAgent:
     return agent
 
 
+def load_linear_agent(model_path: str) -> LinearQAgent:
+    """Load a trained linear function-approximation Q agent from disk."""
+    agent = LinearQAgent()
+    agent.load(model_path)
+    return agent
+
+
+def load_ntuple_agent(model_path: str) -> NTupleQAgent:
+    """Load a trained n-tuple network Q agent from disk."""
+    agent = NTupleQAgent()
+    agent.load(model_path)
+    return agent
+
+
+def make_get_action(agent, game: Game2048, use_search: bool, search_depth: int):
+    """
+    Build a get_action callback bound to one episode's live game.
+
+    `game` is the exact Game2048 instance the caller will step through this
+    episode - the callback reads the board straight from it rather than
+    trusting whatever board argument it's called with, so it can also reach
+    `game` itself (needed to clone() ahead for search). This matches how
+    both call sites already use it: PygameUI.run_agent_game and the headless
+    loop below always pass a fresh copy of this same game's board.
+    """
+    if use_search:
+
+        def get_action(_board: np.ndarray) -> int:
+            return expectimax_select_action(agent, game, depth=search_depth)
+
+        return get_action
+
+    def get_action(board: np.ndarray) -> int:
+        observation = board_to_observation(board)
+        valid_actions = valid_actions_for_board(board)
+        return agent.select_action(
+            observation,
+            valid_actions=valid_actions,
+            use_epsilon=False,
+        )
+
+    return get_action
+
+
 def main():
     """Main evaluation script."""
     parser = argparse.ArgumentParser(description="Evaluate trained 2048 agent")
@@ -59,7 +104,7 @@ def main():
         "--agent-type",
         type=str,
         default="markov",
-        choices=["markov", "random"],
+        choices=["markov", "linear", "ntuple", "random"],
         help="Agent implementation to evaluate",
     )
     parser.add_argument("--visualize", action="store_true", help="Show visual playback")
@@ -67,28 +112,44 @@ def main():
         "--delay", type=int, default=500, help="Delay between moves in ms (for visualization)"
     )
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
+    parser.add_argument(
+        "--use-search",
+        action="store_true",
+        help=(
+            "Choose actions via expectimax search over the loaded agent's "
+            "value function instead of its own select_action. Requires an "
+            "agent that exposes q_values(state) (linear agent type only)."
+        ),
+    )
+    parser.add_argument(
+        "--search-depth",
+        type=int,
+        default=2,
+        help="Number of player-move plies to search when --use-search is set",
+    )
 
     args = parser.parse_args()
+
+    if args.use_search and args.agent_type not in ("linear", "ntuple"):
+        raise ValueError(
+            "--use-search requires --agent-type linear or ntuple (needs agent.q_values)"
+        )
 
     # Load model if provided
     if args.model_path and args.agent_type == "markov":
         print(f"Loading Markov Q agent from: {args.model_path}")
         agent = load_markov_agent(args.model_path)
-
-        def get_action(board: np.ndarray) -> int:
-            observation = board_to_observation(board)
-            valid_actions = valid_actions_for_board(board)
-            return agent.select_action(
-                observation,
-                valid_actions=valid_actions,
-                use_epsilon=False,
-            )
-
+    elif args.model_path and args.agent_type == "linear":
+        print(f"Loading Linear Q agent from: {args.model_path}")
+        agent = load_linear_agent(args.model_path)
+    elif args.model_path and args.agent_type == "ntuple":
+        print(f"Loading N-Tuple Q agent from: {args.model_path}")
+        agent = load_ntuple_agent(args.model_path)
     elif args.model_path and args.agent_type != "random":
         raise ValueError(f"Unsupported agent type: {args.agent_type}")
     else:
         print("No model provided, using random agent")
-        get_action = random_agent
+        agent = None
 
     # Run evaluation
     scores = []
@@ -100,6 +161,12 @@ def main():
         # Create game
         seed = args.seed + episode if args.seed is not None else None
         game = Game2048(seed=seed)
+
+        get_action = (
+            random_agent
+            if agent is None
+            else make_get_action(agent, game, args.use_search, args.search_depth)
+        )
 
         if args.visualize:
             # Visual playback

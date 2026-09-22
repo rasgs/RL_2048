@@ -9,11 +9,11 @@ from typing import Union
 import numpy as np
 from tqdm import tqdm
 
-from src.agents import FeatureQAgent, LinearQAgent, MarkovQAgent
+from src.agents import FeatureQAgent, LinearQAgent, MarkovQAgent, NTupleQAgent
 from src.env import Gym2048Env
 from src.utils import MLFlowLogger, ModelCheckpoint
 
-Agent = Union[FeatureQAgent, LinearQAgent, MarkovQAgent]
+Agent = Union[FeatureQAgent, LinearQAgent, MarkovQAgent, NTupleQAgent]
 
 
 def evaluate_agent(
@@ -79,6 +79,12 @@ def train(
     print(f"Training {agent_type.upper()} Q-Learning Agent for 2048")
     print("=" * 70)
 
+    if invalid_move_penalty < 0:
+        raise ValueError(
+            "invalid_move_penalty must be >= 0 (it is a magnitude; the env "
+            f"subtracts it from the reward), got {invalid_move_penalty}"
+        )
+
     if seed is not None:
         np.random.seed(seed)
         print(f"Random seed: {seed}")
@@ -116,6 +122,17 @@ def train(
             n_step=n_step,
             seed=seed,
         )
+    elif agent_type == "ntuple":
+        agent = NTupleQAgent(
+            learning_rate=learning_rate,
+            gamma=gamma,
+            epsilon_start=epsilon_start,
+            epsilon_end=epsilon_end,
+            epsilon_decay=epsilon_decay,
+            decay_type=decay_type,
+            n_step=n_step,
+            seed=seed,
+        )
     else:  # markov (full state)
         agent = MarkovQAgent(
             learning_rate=learning_rate,
@@ -134,7 +151,9 @@ def train(
     print(f"Agent: {agent.__class__.__name__}")
 
     # Set checkpoint prefix based on agent type
-    prefix = {"feature": "feature_q", "linear": "linear_q"}.get(agent_type, "markov_q")
+    prefix = {"feature": "feature_q", "linear": "linear_q", "ntuple": "ntuple_q"}.get(
+        agent_type, "markov_q"
+    )
 
     checkpoint_manager = ModelCheckpoint(
         save_dir=save_dir,
@@ -307,11 +326,14 @@ def main():
         "--agent-type",
         type=str,
         default="markov",
-        choices=["markov", "feature", "linear"],
+        choices=["markov", "feature", "linear", "ntuple"],
         help=(
             "Agent type: 'markov' (full state), 'feature' (discretized "
-            "heuristic features, tabular), or 'linear' (linear function "
-            "approximation over direction-aware heuristic features)"
+            "heuristic features, tabular), 'linear' (linear function "
+            "approximation over direction-aware heuristic features), or "
+            "'ntuple' (symmetric-sampled n-tuple network over Matsuzaki's "
+            "4x6-tuple shapes - the architecture behind the strongest "
+            "published non-neural-network 2048 agents)"
         ),
     )
     parser.add_argument("--episodes", type=int, default=5000, help="Number of episodes to train")
@@ -333,7 +355,7 @@ def main():
         "--reward-mode",
         type=str,
         default="score",
-        choices=["score", "log_score", "max_tile", "shaped", "shaped_open_reward"],
+        choices=["score", "log_score", "max_tile", "shaped"],
         help="Reward shaping mode",
     )
     parser.add_argument(
